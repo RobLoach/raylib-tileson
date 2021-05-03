@@ -17,6 +17,8 @@ bool IsTiledReady(Map map);
 void DrawTiled(Map map, int posX, int posY, Color tint);
 void UnloadMap(Map map);
 
+// TODO: Add World support with LoadTiledWorld()
+
 #ifdef __cplusplus
 }
 #endif

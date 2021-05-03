@@ -200,6 +200,8 @@ void DrawTiled(Map map, int posX, int posY, Color tint) {
     tson::Map* tsonMap = data->map;
     std::vector<tson::Layer> layers = tsonMap->getLayers();
 
+    // TODO: Draw the background color.
+
     for (auto &layer : layers) {
         drawLayer(layer, data, posX, posY, tint);
     }
