@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.11)
 project (raylib-tileson
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "raylib-tileson"
     HOMEPAGE_URL "https://github.com/robloach/raylib-tileson"
     LANGUAGES C CXX)
