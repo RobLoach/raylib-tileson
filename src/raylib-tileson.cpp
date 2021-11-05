@@ -40,7 +40,7 @@ void LoadTiledImage(RaylibTilesonData* data, const char* baseDir, const std::str
         }
 
         Image loadedImage = LoadImage(image);
-        ImageFormat(&loadedImage, PIXELFORMAT_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+        ImageFormat(&loadedImage, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
 
         Color trans = ColorFromTiledColor(transparentColor);
         ImageColorReplace(&loadedImage, trans, BLANK);
