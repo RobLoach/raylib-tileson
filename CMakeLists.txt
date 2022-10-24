@@ -10,13 +10,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# raylib
-find_package(raylib QUIET)
-if (NOT raylib_FOUND)
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # don't build the supplied examples
-    set(BUILD_GAMES    OFF CACHE BOOL "" FORCE) # or games
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vendor/raylib ${CMAKE_CURRENT_SOURCE_DIR}/vendor/raylib)
-endif()
+# Register the cmake folder for find_package()
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # raylib-tileson
 add_subdirectory(src)

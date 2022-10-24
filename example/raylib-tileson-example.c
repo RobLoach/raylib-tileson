@@ -28,6 +28,8 @@ int main(int argc, char* argv[]) {
     while (!WindowShouldClose()) {
         // Update
         //--------------------------------------------------------------------------------------
+
+        // Move around with the keyboard
         if (IsKeyDown(KEY_LEFT)) {
             position.x += 2;
         }
@@ -39,6 +41,27 @@ int main(int argc, char* argv[]) {
         }
         if (IsKeyDown(KEY_DOWN)) {
             position.y -= 2;
+        }
+
+        // Move based on mouse left click
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            Vector2 delta = GetMouseDelta();
+            position.x += delta.x;
+            position.y += delta.y;
+        }
+
+        // Keep the map within screen bounds
+        if (position.x > 0) {
+            position.x = 0;
+        }
+        if (position.y > 0) {
+            position.y = 0;
+        }
+        if (position.x - GetScreenWidth() < -map.width * map.tileWidth) {
+            position.x = -map.width * map.tileWidth + GetScreenWidth();
+        }
+        if (position.y - GetScreenHeight() < -map.height * map.tileHeight) {
+            position.y = -map.height * map.tileHeight + GetScreenHeight();
         }
 
         // Draw

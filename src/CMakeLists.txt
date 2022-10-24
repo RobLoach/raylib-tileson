@@ -1,3 +1,5 @@
+find_package(raylib)
+
 option(RAYLIB_TILESON "raylib-tileson" ON)
 option(RAYLIB_TILESON_SHARED "raylib-tileson-shared" OFF)
 
