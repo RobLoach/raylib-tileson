@@ -15,6 +15,7 @@ typedef struct Map {
      * The amount of horizontal tiles.
      */
     int width;
+
     /**
      * The amount of vertical tiles.
      */
@@ -32,6 +33,10 @@ typedef struct Map {
 
     /**
      * The internal pointer to the associated RaylibTilesonData.
+     *
+     * This is referenced as a void* so that it can be used from C, even though it requires reference to a C++ class.
+     *
+     * @see RaylibTilesonData
      */
     void* data;
 } Map;
@@ -42,6 +47,8 @@ typedef struct Map {
  * @param fileData The data for the map file.
  * @param dataSize The size of the data in memory.
  * @param baseDir The base directory that's used to load any external map data.
+ *
+ * @return The loaded Map data.
  */
 Map LoadTiledFromMemory(const unsigned char *fileData, int dataSize, const char* baseDir);
 
@@ -49,6 +56,8 @@ Map LoadTiledFromMemory(const unsigned char *fileData, int dataSize, const char*
  * Loads the given Tiled file.
  *
  * @param fileName The filename of the Tiled map to load.
+ *
+ * @return The loaded Map data.
  */
 Map LoadTiled(const char* fileName);
 
@@ -62,15 +71,20 @@ bool IsTiledReady(Map map);
 
 /**
  * Draws the given Tiled map.
+ *
+ * @param map The map to draw.
+ * @param posX The X position of where to draw the map.
+ * @param posY The Y position of where to draw the map.
+ * @param tint The color of which to tint. Use WHITE if you're unsure.
  */
 void DrawTiled(Map map, int posX, int posY, Color tint);
 
 /**
  * Unloads the given map.
+ *
+ * @param map The map data to unload.
  */
 void UnloadMap(Map map);
-
-// TODO: Add World support with LoadTiledWorld()
 
 #ifdef __cplusplus
 }

@@ -6,6 +6,8 @@
 #include "raylib-tileson.h"
 #include "tileson.hpp"
 
+// TODO: Add World support with LoadTiledWorld()
+
 class RaylibTilesonData {
     public:
         std::map<std::string, Texture> textures;

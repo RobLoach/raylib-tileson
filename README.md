@@ -46,8 +46,8 @@ int main(int argc, char* argv[]) {
 ## API
 
 ``` c
-Map LoadTiledFromMemory(const unsigned char *fileData, int dataSize, const char* baseDir);
 Map LoadTiled(const char* fileName);
+Map LoadTiledFromMemory(const unsigned char *fileData, int dataSize, const char* baseDir);
 bool IsTiledReady(Map map);
 void DrawTiled(Map map, int posX, int posY, Color tint);
 void UnloadMap(Map map);
@@ -55,7 +55,7 @@ void UnloadMap(Map map);
 
 ## Alternatives
 
-While *raylib-tileson* does compile and run, it requires compilation with C++17. Mixing C and C++ may not be preferable by all, so there could be a desire to use an alternative...
+While *raylib-tileson* does compile and run from C, it requires compilation with C++17. Mixing C and C++ may not be preferable by all, so there could be a desire to use an alternative...
 
 - [raylib-tmx](https://github.com/RobLoach/raylib-tmx)
 - [raylib-tiled](https://github.com/RobLoach/raylib-tiled)

@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.11)
-project (raylib-tileson
-    VERSION 1.0.0
+project(
+    raylib-tileson
+    VERSION 4.2.0
     DESCRIPTION "raylib-tileson"
     HOMEPAGE_URL "https://github.com/robloach/raylib-tileson"
-    LANGUAGES C CXX)
+    LANGUAGES C CXX
+)
 
 # C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -23,11 +25,11 @@ if(BUILD_RAYLIB_TILESON_EXAMPLE)
 endif()
 
 # Testing
-# include(CTest)
-# enable_testing()
-# if(BUILD_TESTING AND BUILD_RAYLIB_TILESON_EXAMPLE)
-#     set(CTEST_CUSTOM_TESTS_IGNORE
-#         pkg-config--static
-#     )
-#     add_subdirectory(test)
-# endif()
+include(CTest)
+enable_testing()
+if(BUILD_TESTING)
+    set(CTEST_CUSTOM_TESTS_IGNORE
+        pkg-config--static
+    )
+    add_subdirectory(test)
+endif()
