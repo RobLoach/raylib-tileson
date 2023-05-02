@@ -87,7 +87,7 @@ Map LoadTiledFromMemory(const unsigned char *fileData, int dataSize, const char*
     RaylibTilesonData* data = new RaylibTilesonData();
     for (const auto& layer : map->getLayers()) {
         if (layer.getType() == tson::LayerType::ImageLayer) {
-            LoadTiledImage(data, baseDir, layer.getImage(), layer.getTransparentcolor());
+            LoadTiledImage(data, baseDir, layer.getImage(), layer.getTransparentColor());
         }
     }
     for (const auto& tileset : map->getTilesets()) {
@@ -128,9 +128,8 @@ bool IsTiledReady(Map map) {
 }
 
 void DrawTileLayer(tson::Layer& layer, RaylibTilesonData* data, int posX, int posY, Color tint) {
-    for (const auto& [pos, tileObject] : layer.getTileObjects()) {
-        tson::Tile* tile = tileObject.getTile();
-        tson::Tileset *tileset = tileObject.getTile()->getTileset();
+    for (auto& [pos, tileObject] : layer.getTileObjects()) {
+        const tson::Tileset *tileset = tileObject.getTile()->getTileset();
         std::string image = tileset->getImage().string();
         if (data->textures.count(image) == 0) {
             continue;
