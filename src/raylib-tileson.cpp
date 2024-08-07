@@ -109,18 +109,56 @@ Map LoadTiledFromMemory(const unsigned char *fileData, int dataSize, const char*
 }
 
 Map LoadTiled(const char* fileName) {
-    unsigned int bytesRead;
-    unsigned char* data = LoadFileData(fileName, &bytesRead);
-    if (data == NULL || bytesRead == 0) {
+    const char* baseDir = GetDirectoryPath(fileName);
+    tson::Tileson t;
+    auto map = t.parse(fileName);
+
+    if (map == nullptr) {
+        TraceLog(LOG_ERROR, "TILESON: Error parsing the given map");
         struct Map output;
         output.data = NULL;
         return output;
     }
 
-    const char* baseDir = GetDirectoryPath(fileName);
-    Map map = LoadTiledFromMemory(data, bytesRead, baseDir);
-    UnloadFileData(data);
-    return map;
+    // Check if it parsed okay.
+    if(map->getStatus() != tson::ParseStatus::OK) {
+        TraceLog(LOG_ERROR, "TILESON: Map parse error: %s", map->getStatusMessage().c_str());
+        struct Map output;
+        output.data = NULL;
+        return output;
+    }
+
+    // Only support Ortogonal
+    if (map->getOrientation() != "orthogonal") {
+        TraceLog(LOG_ERROR, "TILESON: Only support for orthogonal maps");
+        struct Map output;
+        output.data = NULL;
+        return output;
+    }
+
+    // Load all the images
+    RaylibTilesonData* data = new RaylibTilesonData();
+    for (const auto& layer : map->getLayers()) {
+        if (layer.getType() == tson::LayerType::ImageLayer) {
+            LoadTiledImage(data, baseDir, layer.getImage(), layer.getTransparentColor());
+        }
+    }
+    for (const auto& tileset : map->getTilesets()) {
+        LoadTiledImage(data, baseDir, tileset.getImage().string(), tileset.getTransparentColor());
+    }
+
+    // Save the Map.
+    struct Map output;
+    output.width = map->getSize().x;
+    output.height = map->getSize().y;
+    output.tileWidth = map->getTileSize().x;
+    output.tileHeight = map->getTileSize().y;
+
+    data->map = map.release();
+    output.data = data;
+
+    TraceLog(LOG_INFO, "TILESON: Map parsed successfully");
+    return output;
 }
 
 bool IsTiledReady(Map map) {
