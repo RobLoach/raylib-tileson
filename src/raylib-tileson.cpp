@@ -109,7 +109,7 @@ Map LoadTiledFromMemory(const unsigned char *fileData, int dataSize, const char*
 }
 
 Map LoadTiled(const char* fileName) {
-    unsigned int bytesRead;
+    int bytesRead;
     unsigned char* data = LoadFileData(fileName, &bytesRead);
     if (data == NULL || bytesRead == 0) {
         struct Map output;
