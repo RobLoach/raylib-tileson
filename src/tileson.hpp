@@ -1589,6 +1589,8 @@ namespace tson
 #ifndef TILESON_MAP_HPP
 #define TILESON_MAP_HPP
 
+#include <functional>
+
 
 /*** Start of inlined file: Color.hpp ***/
 //
@@ -1872,6 +1874,11 @@ namespace tson
 			virtual void directory(const fs::path &directory) = 0;
 
 			/*!
+			 * Create a new empty instance using the same engine
+			*/
+			 virtual std::unique_ptr<IJson> create() = 0;
+
+			/*!
 			 * Pure virtual class needs virtual destructor so derived classes can call their own destructors
 			*/
 			virtual ~IJson() = default;
@@ -1959,6 +1966,8 @@ namespace tson
 
 #ifndef TILESON_NLOHMANNJSON_HPP
 #define TILESON_NLOHMANNJSON_HPP
+
+#include <memory>
 
 namespace tson
 {
@@ -2113,6 +2122,11 @@ namespace tson
 			void directory(const fs::path &directory) override
 			{
 				m_path = directory;
+			}
+
+			std::unique_ptr<IJson> create() override
+			{
+				return std::make_unique<NlohmannJson>();
 			}
 
 		protected:
@@ -2435,6 +2449,10 @@ namespace tson
 			void directory(const fs::path &directory) override
 			{
 				m_path = directory;
+			}
+			std::unique_ptr<IJson> create() override
+			{
+				return std::make_unique<PicoJson>();
 			}
 
 		protected:
@@ -2779,6 +2797,10 @@ namespace tson
 				m_path = directory;
 			}
 
+			std::unique_ptr<IJson> create() override
+			{
+				return std::make_unique<Json11>();
+			}
 		protected:
 			[[nodiscard]] inline int32_t getInt32(std::string_view key) override
 			{
@@ -3241,6 +3263,17 @@ namespace tson
 	};
 
 	/*!
+	 * Tileset.hpp - TilesetType
+	 * //'type': imagetileset, imagecollectiontileset
+	 */
+	enum class TilesetType : uint8_t
+	{
+		Undefined = 0,
+		ImageTileset = 1,
+		ImageCollectionTileset = 2
+	};
+
+	/*!
 	 * Map.hpp - ParseStatus
 	 */
 	enum class ParseStatus : uint8_t
@@ -3357,18 +3390,6 @@ namespace tson
 	class Property
 	{
 		public:
-
-			//enum class Type : uint8_t
-			//{
-			//        Undefined = 0,
-			//        Color = 1, /*! color */
-			//        File = 2, /*! file */
-			//        Int = 3, /*! int */
-			//        Boolean = 4, /*! bool */
-			//        Float = 5, /*! float */
-			//        String = 6 /*! string */
-			//};
-
 			inline Property();
 			inline explicit Property(IJson &json, tson::Project *project = nullptr);
 			inline Property(std::string name, std::any value, Type type);
@@ -3434,7 +3455,7 @@ tson::Property::Property(IJson &json, tson::Project *project) : m_project {proje
 	setValueByType(json["value"]);
 }
 
-tson::Property::Property(std::string name, std::any value, Type type) : m_type {type}, m_name { move(name) }, m_value { move(value) }
+tson::Property::Property(std::string name, std::any value, Type type) : m_type {type}, m_name { std::move(name) }, m_value { std::move(value) }
 {
 
 }
@@ -3589,7 +3610,7 @@ tson::Property *tson::PropertyCollection::add(const tson::Property &property)
 tson::Property *tson::PropertyCollection::add(IJson &json, tson::Project *project)
 {
 	tson::Property property = tson::Property(json, project);
-	std::string name = property.getName();
+	const std::string name = property.getName();
 	m_properties[name] = std::move(property);
 	return &m_properties[name];
 }
@@ -3807,7 +3828,7 @@ namespace tson
 			inline bool hasFlipFlags(TileFlipFlags flags);
 
 		private:
-			inline void setObjectTypeByJson(IJson &json);
+			inline void setObjectTypeByJson(IJson &json, IJson* templ);
 
 			ObjectType                        m_objectType = ObjectType::Undefined;    /*! Says with object type this is */
 			bool                              m_ellipse {};                            /*! 'ellipse': Used to mark an object as an ellipse */
@@ -3844,6 +3865,77 @@ namespace tson
 	{
 		return m_properties.getValue<T>(name);
 	}
+
+	/*!
+	* Returns the requested IJson object if it exists in the map file or in a related template file
+	* @param fieldName The name of the field to check
+	* @param main The main json file being parsed
+	* @param templ The template file json, if present, nullptr otherwise.
+	* @return the requested json object if found in the main json file, otherwise if it is found in the template and nullptr if not found anywhere
+	*/
+	inline IJson* readField(const std::string& fieldName,  IJson& main, IJson* templ = nullptr);
+
+	/*!
+	* Attempts to read a text field from main file or the template if not overriden
+	* @param fieldName The name of the field to check
+	* @param main The main json file being parsed
+	* @param templ The template file json, if present, nullptr otherwise.
+	* @return true if the field was found and parsed in any of the objects, false otherwise
+	*/
+   inline bool readField(Text& field, const std::string& fieldName,  IJson& main, IJson* templ = nullptr);
+
+	/*!
+	* Attempts to read a series of coordinates from main file or the template if not overriden
+	* @param fieldName The name of the field to check
+	* @param main The main json file being parsed
+	* @param templ The template file json, if present, nullptr otherwise.
+	* @return true if the field was found and parsed in any of the objects, false otherwise
+	*/
+	inline bool readField(std::vector<Vector2i>& field, const std::string& fieldName, IJson& main, IJson* templ = nullptr);
+
+	/*!
+	* Attempts to read a field from main file or the template if not overriden
+	* @param fieldName The name of the field to check
+	* @param main The main json file being parsed
+	* @param templ The template file json, if present, nullptr otherwise.
+	* @return true if the field was found and parsed in any of the objects, false otherwise
+	*/
+	template <typename T> bool readField(T& field, const std::string& fieldName,  IJson& main, IJson* templ = nullptr)
+	{
+		IJson* fieldJson = readField(fieldName, main, templ);
+		if(fieldJson){
+			field = fieldJson->get<T>();
+			return true;
+		}
+		return false;
+	}
+
+	/*!
+	* Attempts to read a vector from main file or the template if not overriden
+	* @param field Target variable to fill
+	* @param fieldNameX The name of the field to check for the x part of the vector
+	* @param fieldNameY The name of the field to check for the y part of the vector
+	* @param main The main json file being parsed
+	* @param templ The template file json, if present, nullptr otherwise.
+	* @return true if the field was found and parsed in any of the objects, false otherwise
+	*/
+	inline bool readVector(Vector2i& field, const std::string& fieldNameX, const std::string& fieldNameY, IJson& main, IJson* templ = nullptr);
+
+	/*!
+	* Reads all custom properties from the given json node
+	* @param properties Target Properties collection to fill
+	* @param json json node representing the map object
+	* @param map Pointer to current map being parsed
+	*/
+	inline void readProperties(tson::PropertyCollection& properties, IJson& json, tson::Map* map);
+
+	/*!
+	* Reads a gid, parsing flip-flags
+	* @param properties Target Properties collection to fill
+	* @param json json node representing the map object
+	* @param map Pointer to current map being parsed
+	*/
+	inline void readGid(uint32_t& gid, TileFlipFlags& flags, IJson& main, IJson* templ = nullptr);
 }
 
 /*!
@@ -3856,114 +3948,23 @@ tson::Object::Object(IJson &json, tson::Map *map)
 }
 
 /*!
- * Parses a json Tiled object and autoamtically determines the object type based on the data presented.
- * Call getObjectType() to see what object type it is.
- * @param json
- * @return true if all mandatory fields was found. false otherwise.
- */
-bool tson::Object::parse(IJson &json, tson::Map *map)
-{
-	m_map = map;
-	bool allFound = true;
-
-	if(json.count("ellipse") > 0) m_ellipse = json["ellipse"].get<bool>(); //Optional
-	if(json.count("gid") > 0)
-	{
-		uint32_t gid = json["gid"].get<uint32_t>(); //Optional
-		if (gid & FLIPPED_HORIZONTALLY_FLAG) m_flipFlags |= TileFlipFlags::Horizontally;
-		if (gid & FLIPPED_VERTICALLY_FLAG) m_flipFlags |= TileFlipFlags::Vertically;
-		if (gid & FLIPPED_DIAGONALLY_FLAG) m_flipFlags |= TileFlipFlags::Diagonally;
-
-		// Clear flags
-		gid &= ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG);
-
-		m_gid = gid;
-	}
-	if(json.count("id") > 0) m_id = json["id"].get<int>(); else allFound = false;
-	if(json.count("name") > 0) m_name = json["name"].get<std::string>(); else allFound = false;
-	if(json.count("point") > 0) m_point = json["point"].get<bool>(); //Optional
-	if(json.count("rotation") > 0) m_rotation = json["rotation"].get<float>(); else allFound = false;
-	if(json.count("template") > 0) m_template = json["template"].get<std::string>(); //Optional
-
-	if(json.count("type") > 0) m_type = json["type"].get<std::string>();
-	else if(json.count("class") > 0) m_type = json["class"].get<std::string>(); //Tiled v1.9 renamed 'type' to 'class'
-	else allFound = false;
-
-	if(json.count("visible") > 0) m_visible = json["visible"].get<bool>(); else allFound = false;
-
-	if(json.count("width") > 0 && json.count("height") > 0)
-		m_size = {json["width"].get<int>(), json["height"].get<int>()}; else allFound = false;
-	if(json.count("x") > 0 && json.count("y") > 0)
-		m_position = {json["x"].get<int>(), json["y"].get<int>()}; else allFound = false;
-
-	if(json.count("text") > 0)
-	{
-		//Old logic
-		//bool hasColor = json["text"].count("color") > 0;
-		//tson::Color c = (hasColor) ? tson::Colori(json["text"]["color"].get<std::string>()) : tson::Colori();
-		//m_text = {json["text"]["text"].get<std::string>(), json["text"]["wrap"].get<bool>(), c}; //Optional
-		m_text = tson::Text(json["text"]);
-		//
-
-	}
-
-	setObjectTypeByJson(json);
-
-	if(m_objectType == ObjectType::Template)
-		allFound = true; //Just accept anything with this type
-
-	//More advanced data
-	if(json.count("polygon") > 0 && json["polygon"].isArray())
-	{
-		auto &polygon = json.array("polygon");
-		std::for_each(polygon.begin(), polygon.end(),[&](std::unique_ptr<IJson> &item)
-		{
-			IJson &j = *item;
-			m_polygon.emplace_back(j["x"].get<int>(), j["y"].get<int>());
-		});
-
-	}
-
-	if(json.count("polyline") > 0 && json["polyline"].isArray())
-	{
-		auto &polyline = json.array("polyline");
-		std::for_each(polyline.begin(), polyline.end(),[&](std::unique_ptr<IJson> &item)
-		{
-			IJson &j = *item;
-			m_polyline.emplace_back(j["x"].get<int>(), j["y"].get<int>());
-		});
-	}
-
-	if(json.count("properties") > 0 && json["properties"].isArray())
-	{
-		auto &properties = json.array("properties");
-		std::for_each(properties.begin(), properties.end(), [&](std::unique_ptr<IJson> &item)
-		{
-			m_properties.add(*item);
-		});
-	}
-
-	return allFound;
-}
-
-/*!
  * Sets an object type based on json data.
  * @param json
  */
-void tson::Object::setObjectTypeByJson(IJson &json)
+void tson::Object::setObjectTypeByJson(IJson &json, IJson* templ)
 {
 	m_objectType = ObjectType::Undefined;
 	if(m_ellipse)
 		m_objectType = ObjectType::Ellipse;
 	else if(m_point)
 		m_objectType = ObjectType::Point;
-	else if(json.count("polygon") > 0)
+	else if(readField("polygon", json, templ))
 		m_objectType = ObjectType::Polygon;
-	else if(json.count("polyline") > 0)
+	else if(readField("polyline", json, templ))
 		m_objectType = ObjectType::Polyline;
-	else if(json.count("text") > 0)
+	else if(readField("text", json, templ))
 		m_objectType = ObjectType::Text;
-	else if(json.count("gid") > 0)
+	else if(readField("gid", json, templ))
 		m_objectType = ObjectType::Object;
 	else if(json.count("template") > 0)
 		m_objectType = ObjectType::Template;
@@ -5750,8 +5751,8 @@ namespace tson
 		public:
 			inline Tile() = default;
 			inline Tile(IJson &json, tson::Tileset *tileset, tson::Map *map);
-			inline Tile(uint32_t id, tson::Tileset *tileset, tson::Map *map);
-			inline Tile(uint32_t id, tson::Map *map); //v1.2.0
+			inline static Tile CreateFlippedTile(uint32_t gid, tson::Map *map); // v1.2.0
+			inline static Tile CreateMissingTile(uint32_t id, tson::Tileset* tileset, tson::Map* map);
 			inline bool parse(IJson &json, tson::Tileset *tileset, tson::Map *map);
 			inline bool parseId(IJson &json);
 
@@ -5834,28 +5835,6 @@ tson::Tile::Tile(IJson &json, tson::Tileset *tileset, tson::Map *map)
 }
 
 /*!
- * Used in cases where you have a tile without any property
- * @param id
- */
-tson::Tile::Tile(uint32_t id, tson::Tileset *tileset, tson::Map *map) : m_id {id}, m_gid {id}
-{
-	m_tileset = tileset;
-	m_map = map;
-	manageFlipFlagsByIdThenRemoveFlags(m_gid);
-	performDataCalculations();
-}
-
-/*!
- * Used in cases where you have a FLIP FLAGGED tile
- * @param id
- */
-tson::Tile::Tile(uint32_t id, tson::Map *map) : m_id {id}, m_gid {id}
-{
-	m_map = map;
-	manageFlipFlagsByIdThenRemoveFlags(m_gid);
-}
-
-/*!
  * For flip flagged tiles, tilesets must be resolved later.
  * @param tileset
  */
@@ -5863,62 +5842,6 @@ void tson::Tile::addTilesetAndPerformCalculations(tson::Tileset *tileset)
 {
 	m_tileset = tileset;
 	performDataCalculations();
-}
-
-/*!
- * Parses a tile from a Tiled json. id on tile is store as id + 1 to match the references in data containers.
- * @param json
- * @return
- */
-bool tson::Tile::parse(IJson &json, tson::Tileset *tileset, tson::Map *map)
-{
-	m_tileset = tileset;
-	m_map = map;
-
-	if(json.count("image") > 0) m_image = fs::path(json["image"].get<std::string>()); //Optional
-
-	bool allFound = parseId(json);
-
-	if(json.count("type") > 0) m_type = json["type"].get<std::string>(); //Optional
-	else if(json.count("class") > 0) m_type = json["class"].get<std::string>(); //Tiled v1.9 renamed 'type' to 'class'
-
-	if(json.count("objectgroup") > 0) m_objectgroup = tson::Layer(json["objectgroup"], m_map); //Optional
-
-	if(json.count("imagewidth") > 0 && json.count("imageheight") > 0)
-		m_imageSize = {json["imagewidth"].get<int>(), json["imageheight"].get<int>()}; //Optional
-
-	m_subRect = {0,0, m_imageSize.x, m_imageSize.y};
-	if(json.count("x") > 0) m_subRect.x = json["x"].get<int>(); //Optional
-	if(json.count("y") > 0) m_subRect.y = json["y"].get<int>(); //Optional
-	if(json.count("width") > 0) m_subRect.width = json["width"].get<int>(); //Optional
-	if(json.count("height") > 0) m_subRect.height = json["height"].get<int>(); //Optional
-
-	//More advanced data
-	if(json.count("animation") > 0 && json["animation"].isArray())
-	{
-		auto &animation = json.array("animation");
-		std::vector<tson::Frame> frames;
-		std::for_each(animation.begin(), animation.end(), [&](std::unique_ptr<IJson> &item) { frames.emplace_back(*item); });
-		if(frames.size() > 0)
-		{
-			m_animation.setFrames(frames);
-		}
-	}
-	if(json.count("terrain") > 0 && json["terrain"].isArray())
-	{
-		auto &terrain = json.array("terrain");
-		std::for_each(terrain.begin(), terrain.end(), [&](std::unique_ptr<IJson> &item) { m_terrain.emplace_back(item->get<int>()); });
-	}
-
-	if(json.count("properties") > 0 && json["properties"].isArray())
-	{
-		auto &properties = json.array("properties");
-		std::for_each(properties.begin(), properties.end(), [&](std::unique_ptr<IJson> &item) { m_properties.add(*item); });
-	}
-
-	performDataCalculations();
-
-	return allFound;
 }
 
 /*!
@@ -6309,6 +6232,7 @@ const tson::Vector2i &tson::Grid::getSize() const
 namespace tson
 {
 	class Map;
+	class Project;
 	class Tileset
 	{
 		public:
@@ -6320,6 +6244,7 @@ namespace tson
 			[[nodiscard]] inline int getFirstgid() const;
 
 			[[nodiscard]] inline const fs::path &getImagePath() const;
+			[[nodiscard]] inline const fs::path &getFullImagePath() const;
 			[[nodiscard]] inline const fs::path &getImage() const;
 			[[nodiscard]] inline const Vector2i &getImageSize() const;
 			[[nodiscard]] inline int getMargin() const;
@@ -6328,7 +6253,8 @@ namespace tson
 			[[nodiscard]] inline int getTileCount() const;
 			[[nodiscard]] inline const Vector2i &getTileSize() const;
 			[[nodiscard]] inline const Colori &getTransparentColor() const;
-			[[nodiscard]] inline const std::string &getType() const;
+			[[nodiscard]] inline const std::string& getTypeStr() const;
+			[[nodiscard]] inline TilesetType getType() const;
 			[[nodiscard]] inline const std::string &getClassType() const;
 			[[nodiscard]] inline tson::TiledClass *getClass(); /*! Declared in tileson_forward.hpp */
 			[[nodiscard]] inline std::vector<tson::Tile> &getTiles();
@@ -6361,12 +6287,16 @@ namespace tson
 			#ifndef TSON_TEST_ENABLED
 		private:
 			#endif
+
+			[[nodiscard]] inline tson::Project *getProject() const;
+
 			inline void generateMissingTiles();
 
 			int                           m_columns {};       /*! 'columns': The number of tile columns in the tileset */
 			int                           m_firstgid {};      /*! 'firstgid': GID corresponding to the first tile in the set */
 
 			fs::path                      m_image;            /*! 'image': Image used for tiles in this set */
+			fs::path                      m_imagePath;        /*!  Image path relative to the tileset json of this tileset */
 
 			tson::Vector2i                m_imageSize;        /*! x = 'imagewidth' and y = 'imageheight': in pixels */
 			int                           m_margin {};        /*! 'margin': Buffer between image edge and first tile (pixels)*/
@@ -6375,7 +6305,8 @@ namespace tson
 			int                           m_tileCount {};     /*! 'tilecount': The number of tiles in this tileset */
 			tson::Vector2i                m_tileSize;         /*! x = 'tilewidth' and y = 'tileheight': Maximum size of tiles in this set */
 			tson::Colori                  m_transparentColor; /*! 'transparentcolor': Hex-formatted color (#RRGGBB) (optional) */
-			std::string                   m_type;             /*! 'type': tileset (for tileset files, since 1.0) */
+			std::string                   m_typeStr;          /*! 'type': tileset (for tileset files, since 1.0) */
+			TilesetType                   m_type{ TilesetType::Undefined }; /*! Tileset type as enum */
 
 			std::vector<tson::Tile>       m_tiles;            /*! 'tiles': Array of Tiles (optional) */
 			std::vector<tson::WangSet>    m_wangsets;         /*! 'wangsets':Array of Wang sets (since 1.1.5) */
@@ -6445,21 +6376,55 @@ bool tson::Tileset::parse(IJson &json, tson::Map *map)
 			return false;
 	}
 
-	if(json.count("columns") > 0) m_columns = json["columns"].get<int>(); else allFound = false;
+	if (json.count("columns") > 0)
+	{
+		m_columns = json["columns"].get<int>();
+		if (m_columns == 0)
+		{
+			m_type = TilesetType::ImageCollectionTileset;
+		}
+		else if (m_columns > 0)
+		{
+			m_type = TilesetType::ImageTileset;
+		}
+	}
+	else
+	{
+		allFound = false;
+	}
 
-	if(json.count("image") > 0) m_image = fs::path(json["image"].get<std::string>()); else allFound = false;
+	// Image tileset specific properties
+	if (m_type == TilesetType::ImageTileset)
+	{
+		if (json.count("image") > 0)
+		{
+			m_image = fs::path(json["image"].get<std::string>());
+			m_imagePath = m_path.parent_path() / m_image;
+		}
+		else
+		{
+			allFound = false;
+		}
+
+		if (json.count("imagewidth") > 0 && json.count("imageheight") > 0)
+		{
+			m_imageSize = { json["imagewidth"].get<int>(), json["imageheight"].get<int>() };
+		}
+		else
+		{
+			allFound = false;
+		}
+	}
 
 	if(json.count("margin") > 0) m_margin = json["margin"].get<int>(); else allFound = false;
 	if(json.count("name") > 0) m_name = json["name"].get<std::string>(); else allFound = false;
 	if(json.count("spacing") > 0) m_spacing = json["spacing"].get<int>(); else allFound = false;
 	if(json.count("tilecount") > 0) m_tileCount = json["tilecount"].get<int>(); else allFound = false;
 	if(json.count("transparentcolor") > 0) m_transparentColor = tson::Colori(json["transparentcolor"].get<std::string>()); //Optional
-	if(json.count("type") > 0) m_type = json["type"].get<std::string>();
+	if (json.count("type") > 0) m_typeStr = json["type"].get<std::string>();
 	if(json.count("grid") > 0) m_grid = tson::Grid(json["grid"]);
 	if(json.count("class") > 0) m_classType = json["class"].get<std::string>();                     //Optional
 
-	if(json.count("imagewidth") > 0 && json.count("imageheight") > 0)
-		m_imageSize = {json["imagewidth"].get<int>(), json["imageheight"].get<int>()}; else allFound = false;
 	if(json.count("tilewidth") > 0 && json.count("tileheight") > 0)
 		m_tileSize = {json["tilewidth"].get<int>(), json["tileheight"].get<int>()}; else allFound = false;
 	if(json.count("tileoffset") > 0)
@@ -6499,7 +6464,7 @@ bool tson::Tileset::parse(IJson &json, tson::Map *map)
 	if(json.count("properties") > 0 && json["properties"].isArray())
 	{
 		auto &properties = json.array("properties");
-		std::for_each(properties.begin(), properties.end(), [&](std::unique_ptr<IJson> &item) { m_properties.add(*item); });
+		std::for_each(properties.begin(), properties.end(), [&](std::unique_ptr<IJson> &item) { m_properties.add(*item, getProject()); });
 	}
 
 	if(json.count("objectalignment") > 0)
@@ -6540,8 +6505,14 @@ int tson::Tileset::getFirstgid() const
  * 'image': Image used for tiles in this set
  * @return
  */
-
 const fs::path &tson::Tileset::getImagePath() const { return m_image; }
+
+/*!
+ * Gets a path to the image used in this tileset relative to the JSON
+ * file defining this tileset.
+ * @return A path that can be used to open the image file of this tileset.
+ */
+const fs::path &tson::Tileset::getFullImagePath() const { return m_imagePath; }
 
 /*!
  * x = 'imagewidth' and y = 'imageheight': in pixels
@@ -6610,7 +6581,16 @@ const tson::Colori &tson::Tileset::getTransparentColor() const
  * 'type': tileset (for tileset files, since 1.0)
  * @return
  */
-const std::string &tson::Tileset::getType() const
+const std::string& tson::Tileset::getTypeStr() const
+{
+	return m_typeStr;
+}
+
+/*!
+ * 'type': Tileset type as enum
+ * @return
+*/
+tson::TilesetType tson::Tileset::getType() const
 {
 	return m_type;
 }
@@ -6728,11 +6708,11 @@ void tson::Tileset::generateMissingTiles()
 	for(auto &tile : m_tiles)
 		tileIds.push_back(tile.getId());
 
-	for(uint32_t i = m_firstgid; i < m_firstgid + (uint32_t) m_tileCount; ++i)
+	for (uint32_t i = 1; i < (uint32_t)m_tileCount + 1; ++i)
 	{
-		if(std::count(tileIds.begin(), tileIds.end(), i) == 0)
+		if (std::count(tileIds.begin(), tileIds.end(), i) == 0)
 		{
-			m_tiles.emplace_back(Tile(i, this, m_map));
+			m_tiles.emplace_back(Tile::CreateMissingTile(i, this, m_map));
 		}
 	}
 }
@@ -6834,13 +6814,16 @@ const std::string &tson::Tileset::getClassType() const
 
 namespace tson
 {
+	using LinkedFileParser = std::function<std::unique_ptr<IJson>(std::string relativePath)>;
+	class Object;
 	class Map
 	{
+		friend class Object;
 		public:
 			inline Map() = default;
 			inline Map(ParseStatus status, std::string description);
-			inline explicit Map(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project);
-			inline bool parse(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project);
+			inline explicit Map(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project, tson::LinkedFileParser linkedFileParser = nullptr);
+			inline bool parse(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project, tson::LinkedFileParser linkedFileParser = nullptr);
 
 			[[nodiscard]] inline const Colori &getBackgroundColor() const;
 			[[nodiscard]] inline const Vector2i &getSize() const;
@@ -6882,6 +6865,7 @@ namespace tson
 			inline Tileset * getTilesetByGid(uint32_t gid);
 
 		private:
+			inline IJson* parseLinkedFile(const std::string& path);
 			inline bool createTilesetData(IJson &json);
 			inline void processData();
 
@@ -6919,6 +6903,9 @@ namespace tson
 
 			std::string                            m_classType{};              /*! 'class': The class of this map (since 1.9, defaults to “”). */
 			std::shared_ptr<tson::TiledClass>      m_class {};
+
+			tson::LinkedFileParser                 m_linkedFileParser;     /*! callback function to parse linked files */
+			std::map<std::string, std::unique_ptr<IJson>> m_linkedFiles;  /*! key: relative path to linked file. Value: Pointer to loaded JSON */
 	};
 
 	/*!
@@ -6947,22 +6934,42 @@ tson::Map::Map(tson::ParseStatus status, std::string description) : m_status {st
 /*!
  * Parses a json of a Tiled map.
  * @param json A json object with the format of Map
+ * @param linkedFileParser A callback function that must return a IJson object when a linked file is found in the map
  * @return true if all mandatory fields was found. false otherwise.
  */
-tson::Map::Map(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project)
+tson::Map::Map(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project, tson::LinkedFileParser linkedFileParser)
 {
-	parse(json, decompressors, project);
+	parse(json, decompressors, project, linkedFileParser);
 }
 
 /*!
  * Parses a json of a Tiled map.
  * @param json A json object with the format of Map
+ * @param linkedFileParser A callback function that must return a IJson object when a linked file is found in the map
  * @return true if all mandatory fields was found. false otherwise.
  */
-bool tson::Map::parse(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project)
+bool tson::Map::parse(IJson &json, tson::DecompressorContainer *decompressors, tson::Project *project, tson::LinkedFileParser linkedFileParser)
 {
 	m_decompressors = decompressors;
 	m_project = project;
+	m_linkedFileParser = linkedFileParser;
+
+	if(!m_linkedFileParser)
+	{  // build a default linked file parser out of processing relative paths to
+	   // the main json's location.
+		m_linkedFileParser = [&json](std::string relativePath) -> std::unique_ptr<IJson>
+		{
+			if(json.directory().empty())
+				return nullptr;
+
+			std::unique_ptr<IJson> linkedFileJson = json.create();
+			bool parseOk = linkedFileJson->parse(json.directory() / relativePath);
+			if(parseOk)
+				return linkedFileJson;
+			else
+				return nullptr;
+		};
+	}
 
 	bool allFound = true;
 	if(json.count("compressionlevel") > 0)
@@ -7021,7 +7028,30 @@ bool tson::Map::parse(IJson &json, tson::DecompressorContainer *decompressors, t
 
 	processData();
 
+	m_linkedFiles.clear(); // close all open linked json files
+
 	return allFound;
+}
+
+/*!
+ * Attempts to parse a linked file found in the map.
+ * @param relativePath Path to the linked file, relative to the map file.
+ * @return a IJson pointer to the parsed file.
+ */
+tson::IJson* tson::Map::parseLinkedFile(const std::string& relativePath)
+{
+	auto it = m_linkedFiles.find(relativePath);
+	if(it == m_linkedFiles.end())
+	{
+		if (!m_linkedFileParser) return nullptr;
+		std::unique_ptr<IJson> linkedFileJson = m_linkedFileParser(relativePath);
+		if(!linkedFileJson)
+			return nullptr;
+
+		auto result = m_linkedFiles.emplace(relativePath, std::move(linkedFileJson));
+		return result.first->second.get();
+	}
+	else return it->second.get();
 }
 
 /*!
@@ -7079,7 +7109,7 @@ void tson::Map::processData()
 		const std::set<uint32_t> &flaggedTiles = layer.getUniqueFlaggedTiles();
 		for(uint32_t ftile : flaggedTiles)
 		{
-			tson::Tile tile {ftile, layer.getMap()};
+			tson::Tile tile = tson::Tile::CreateFlippedTile(ftile, layer.getMap());
 			if(m_tileMap.count(tile.getGid()))
 			{
 				tson::Tile *originalTile = m_tileMap[tile.getGid()];
@@ -7689,7 +7719,7 @@ namespace tson
 			[[nodiscard]] inline uint32_t getId() const;
 			[[nodiscard]] inline const std::string &getName() const;
 			[[nodiscard]] inline const std::string &getType() const;
-			[[nodiscard]] inline const PropertyCollection &getMembers() const;
+			[[nodiscard]] inline PropertyCollection &getMembers();
 			inline void update(IJson &json);
 			inline void update(PropertyCollection &properties);
 
@@ -7740,7 +7770,7 @@ namespace tson
 		return m_type;
 	}
 
-	const PropertyCollection &TiledClass::getMembers() const
+	PropertyCollection &TiledClass::getMembers()
 	{
 		return m_members;
 	}
@@ -8570,6 +8600,97 @@ tson::TiledClass *tson::Map::getClass()
 
 // T i l e . h p p
 // ---------------------
+/*!
+ * Used in cases where you have a FLIP FLAGGED tile
+ * @param id
+ */
+tson::Tile tson::Tile::CreateFlippedTile(uint32_t gid, tson::Map* map)
+{
+	// Parse flip flags and remove flip bits from global id
+	tson::Tile tile;
+	tile.manageFlipFlagsByIdThenRemoveFlags(gid);
+
+	tile.m_map = map;
+	tile.m_gid = gid;
+
+	// Compute local id from global id
+	tile.m_id = tile.m_gid - tile.m_map->getTilesetByGid(tile.m_gid)->getFirstgid() + 1;
+
+	return tile;
+}
+
+/*!
+ * Used in cases where you have a tile without any property
+ * @param id
+ */
+tson::Tile tson::Tile::CreateMissingTile(uint32_t id, tson::Tileset* tileset, tson::Map* map)
+{
+	Tile tile;
+	tile.m_tileset = tileset;
+	tile.m_map = map;
+	tile.m_id = id;
+	tile.m_gid = tileset->getFirstgid() + id - 1;
+	tile.performDataCalculations();
+
+	return tile;
+}
+
+/*!
+ * Parses a tile from a Tiled json. id on tile is store as id + 1 to match the references in data containers.
+ * @param json
+ * @return
+ */
+bool tson::Tile::parse(IJson &json, tson::Tileset *tileset, tson::Map *map)
+{
+	m_tileset = tileset;
+	m_map = map;
+
+	if(json.count("image") > 0) m_image = fs::path(json["image"].get<std::string>()); //Optional
+
+	bool allFound = parseId(json);
+
+	if(json.count("type") > 0) m_type = json["type"].get<std::string>(); //Optional
+	else if(json.count("class") > 0) m_type = json["class"].get<std::string>(); //Tiled v1.9 renamed 'type' to 'class'
+
+	if(json.count("objectgroup") > 0) m_objectgroup = tson::Layer(json["objectgroup"], m_map); //Optional
+
+	if(json.count("imagewidth") > 0 && json.count("imageheight") > 0)
+		m_imageSize = {json["imagewidth"].get<int>(), json["imageheight"].get<int>()}; //Optional
+
+	m_subRect = {0,0, m_imageSize.x, m_imageSize.y};
+	if(json.count("x") > 0) m_subRect.x = json["x"].get<int>(); //Optional
+	if(json.count("y") > 0) m_subRect.y = json["y"].get<int>(); //Optional
+	if(json.count("width") > 0) m_subRect.width = json["width"].get<int>(); //Optional
+	if(json.count("height") > 0) m_subRect.height = json["height"].get<int>(); //Optional
+
+	//More advanced data
+	if(json.count("animation") > 0 && json["animation"].isArray())
+	{
+		auto &animation = json.array("animation");
+		std::vector<tson::Frame> frames;
+		std::for_each(animation.begin(), animation.end(), [&](std::unique_ptr<IJson> &item) { frames.emplace_back(*item); });
+		if(frames.size() > 0)
+		{
+			m_animation.setFrames(frames);
+		}
+	}
+	if(json.count("terrain") > 0 && json["terrain"].isArray())
+	{
+		auto &terrain = json.array("terrain");
+		std::for_each(terrain.begin(), terrain.end(), [&](std::unique_ptr<IJson> &item) { m_terrain.emplace_back(item->get<int>()); });
+	}
+
+	if(json.count("properties") > 0 && json["properties"].isArray())
+	{
+		auto &properties = json.array("properties");
+		tson::Project *project = (m_map != nullptr) ? m_map->getProject() : nullptr;
+		std::for_each(properties.begin(), properties.end(), [&](std::unique_ptr<IJson> &item) { m_properties.add(*item, project); });
+	}
+
+	performDataCalculations();
+
+	return allFound;
+}
 
 /*!
  * Really just a shortcut to retrieve the tile size from the map.
@@ -8604,29 +8725,45 @@ bool tson::Tile::parseId(IJson &json)
  */
 void tson::Tile::performDataCalculations()
 {
-	if(m_tileset == nullptr || m_map == nullptr)
+	if (m_tileset == nullptr || m_map == nullptr)
 		return;
 
-	int firstId = m_tileset->getFirstgid(); //First tile id of the tileset
-	int columns = m_tileset->getColumns();
-	int rows = m_tileset->getTileCount() / columns;
-	int lastId = (m_tileset->getFirstgid() + m_tileset->getTileCount()) - 1;
+	m_drawingRect = { 0, 0, 0, 0 };
 
-	int const gid = static_cast<int>(getGid());
-	if (gid >= firstId && gid <= lastId)
+	if (m_tileset->getType() == TilesetType::ImageTileset)
 	{
-		int const baseTilePosition = (gid - firstId);
+		int firstId = m_tileset->getFirstgid(); //First tile id of the tileset
+		int columns = m_tileset->getColumns();
+		int rows = m_tileset->getTileCount() / columns;
+		int lastId = (m_tileset->getFirstgid() + m_tileset->getTileCount()) - 1;
 
-		int const tileModX = (baseTilePosition % columns);
-		int const currentRow = (baseTilePosition / columns);
-		int const offsetX = (tileModX != 0) ? ((tileModX) * m_map->getTileSize().x) : (0 * m_map->getTileSize().x);
-		int const offsetY =  (currentRow < rows-1) ? (currentRow * m_map->getTileSize().y) : ((rows-1) * m_map->getTileSize().y);
+		int const gid = static_cast<int>(getGid());
+		if (gid >= firstId && gid <= lastId)
+		{
+			int const baseTilePosition = (gid - firstId);
 
-		tson::Vector2i spacing = m_tileset->getMarginSpacingOffset({tileModX, currentRow});
-		m_drawingRect = { offsetX + spacing.x, offsetY + spacing.y, m_map->getTileSize().x, m_map->getTileSize().y };
+			int const tileModX = (baseTilePosition % columns);
+			int const currentRow = (baseTilePosition / columns);
+			int const offsetX = (tileModX != 0) ? ((tileModX)*m_map->getTileSize().x) : (0 * m_map->getTileSize().x);
+			int const offsetY = (currentRow < rows - 1) ? (currentRow * m_map->getTileSize().y) : ((rows - 1) * m_map->getTileSize().y);
+
+			tson::Vector2i spacing = m_tileset->getMarginSpacingOffset({ tileModX, currentRow });
+			m_drawingRect = { offsetX + spacing.x, offsetY + spacing.y, m_tileset->getTileSize().x, m_tileset->getTileSize().y };
+		}
 	}
-	else
-		m_drawingRect = {0, 0, 0, 0};
+	else if (m_tileset->getType() == TilesetType::ImageCollectionTileset)
+	{
+		tson::Vector2i imageSize = m_imageSize;
+
+		// Tile in Image Collection Tileset contains image size
+		if (getFlipFlags() != tson::TileFlipFlags::None)
+		{
+			uint32_t id = getGid() - m_tileset->getFirstgid() + 1;
+			imageSize = m_tileset->getTile(id)->getImageSize();
+		}
+
+		m_drawingRect = { 0, 0, imageSize.x, imageSize.y };
+	}
 }
 
 /*!
@@ -8635,7 +8772,8 @@ void tson::Tile::performDataCalculations()
  */
 const tson::Vector2f tson::Tile::getPosition(const std::tuple<int, int> &tileDataPos)
 {
-	return {((float) std::get<0>(tileDataPos)) * m_drawingRect.width, ((float) std::get<1>(tileDataPos)) * m_drawingRect.height};
+	tson::Vector2i tileSize = m_map->getTileSize();
+	return {((float) std::get<0>(tileDataPos)) * tileSize.x, ((float) std::get<1>(tileDataPos)) * tileSize.y};
 }
 
 /*!
@@ -8659,6 +8797,10 @@ tson::TiledClass *tson::Tile::getClass()
 
 // T i l e s e t . h p p
 // ------------------------
+
+tson::Project *tson::Tileset::getProject() const {
+	return m_map ? m_map->getProject() : nullptr;
+}
 
 tson::TiledClass *tson::Tileset::getClass()
 {
@@ -8830,6 +8972,176 @@ tson::TiledClass *tson::Layer::getClass()
 // O b j e c t . h p p
 // --------------------
 
+/*!
+* Returns the requested IJson object if it exists in the map file or in a related template file
+* @param fieldName The name of the field to check
+* @param main The main json file being parsed
+* @param templ The template file json, if present, nullptr otherwise.
+* @return the requested json object if found in the main json file, otherwise if it is found in the template and nullptr if not found anywhere
+*/
+	tson::IJson* tson::readField(const std::string& fieldName,  IJson& main, IJson* templ)
+{
+	if(main.count(fieldName) > 0)
+	{
+		return &main[fieldName];
+	} else if (templ && templ->count(fieldName) > 0)
+	{
+		return  &(*templ)[fieldName];
+	}
+
+	return nullptr;
+}
+
+/*!
+* Attempts to read a text field from main file or the template if not overriden
+* @param fieldName The name of the field to check
+* @param main The main json file being parsed
+* @param templ The template file json, if present, nullptr otherwise.
+* @return true if the field was found and parsed in any of the objects, false otherwise
+*/
+bool tson::readField(Text& field, const std::string& fieldName,  IJson& main, IJson* templ)
+{
+	IJson* fieldJson = readField(fieldName, main, templ);
+	if(fieldJson){
+		field = tson::Text(*fieldJson);
+		return true;
+	}
+	return false;
+}
+
+/*!
+* Attempts to read a series of coordinates from main file or the template if not overriden
+* @param fieldName The name of the field to check
+* @param main The main json file being parsed
+* @param templ The template file json, if present, nullptr otherwise.
+* @return true if the field was found and parsed in any of the objects, false otherwise
+*/
+bool tson::readField(std::vector<Vector2i>& field, const std::string& fieldName, IJson& main, IJson* templ)
+{
+	IJson* fieldJson = readField(fieldName, main, templ);
+	if(fieldJson && fieldJson->isArray())
+	{
+		auto polyline = fieldJson->array();
+		std::for_each(polyline.begin(), polyline.end(),[&field](std::unique_ptr<IJson> &item)
+		{
+			IJson &j = *item;
+			field.emplace_back(j["x"].get<int>(), j["y"].get<int>());
+		});
+		return true;
+	}
+	return false;
+}
+
+/*!
+* Attempts to read a vector from main file or the template if not overriden
+* @param field Target variable to fill
+* @param fieldNameX The name of the field to check for the x part of the vector
+* @param fieldNameY The name of the field to check for the y part of the vector
+* @param main The main json file being parsed
+* @param templ The template file json, if present, nullptr otherwise.
+* @return true if the field was found and parsed in any of the objects, false otherwise
+*/
+bool tson::readVector(Vector2i& field, const std::string& fieldNameX, const std::string& fieldNameY, IJson& main, IJson* templ)
+{
+	int x = 0, y = 0;
+	if(readField(x, fieldNameX, main, templ) && readField(y, fieldNameY, main, templ))
+	{
+		field = {x, y};
+		return true;
+	}
+	return false;
+}
+
+/*!
+* Reads all custom properties from the given json node
+* @param properties Target Properties collection to fill
+* @param json json node representing the map object
+* @param map Pointer to current map being parsed
+*/
+void tson::readProperties(tson::PropertyCollection& properties, IJson& json, tson::Map* map)
+{
+	if(json.count("properties") > 0 && json["properties"].isArray())
+	{
+		auto &props = json.array("properties");
+		tson::Project *project = (map != nullptr) ? map->getProject() : nullptr;
+		std::for_each(props.begin(), props.end(), [&](std::unique_ptr<IJson> &item)
+		{
+			properties.add(*item, project);
+		});
+	}
+}
+
+/*!
+* Reads a gid, parsing flip-flags
+* @param gid Target gid to fill
+* @param flags Target flip flags to fill
+* @param main The main json file being parsed
+* @param templ The template file json, if present, nullptr otherwise.
+*/
+void tson::readGid(uint32_t& gid, TileFlipFlags& flags, IJson& main, IJson* templ)
+{
+	uint32_t g;
+	if(readField(g, "gid", main, templ))
+	{
+		if (g & FLIPPED_HORIZONTALLY_FLAG) flags |= TileFlipFlags::Horizontally;
+		if (g & FLIPPED_VERTICALLY_FLAG) flags |= TileFlipFlags::Vertically;
+		if (g & FLIPPED_DIAGONALLY_FLAG) flags |= TileFlipFlags::Diagonally;
+
+		// Clear flags
+		g &= ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG);
+
+		gid = g;
+	}
+}
+
+/*!
+ * Parses a json Tiled object and automatically determines the object type based on the data presented.
+ * Call getObjectType() to see what object type it is.
+ * @param json
+ * @return true if all mandatory fields was found. false otherwise.
+ */
+bool tson::Object::parse(IJson &json, tson::Map *map)
+{
+	m_map = map;
+	bool allFound = true;
+	IJson* templateJson = nullptr;
+
+	if(readField(m_template, "template", json) && map != nullptr)
+	{
+		IJson* tobjJsonFile = map->parseLinkedFile(m_template);
+		if(tobjJsonFile)
+			templateJson = readField("object", *tobjJsonFile);
+	}
+
+	readField(m_ellipse, "ellipse", json, templateJson); //Optional
+	readField(m_point, "point", json, templateJson); // Optional
+	readField(m_text, "text", json, templateJson);
+	readGid(m_gid, m_flipFlags, json, templateJson);
+
+	allFound &= readField(m_id, "id", json, templateJson);
+	allFound &= readField(m_name, "name", json, templateJson);
+	allFound &= readField(m_rotation, "rotation", json, templateJson);
+	allFound &= readField(m_type, "type", json, templateJson) || readField(m_type, "class", json, templateJson); //Tiled v1.9 renamed 'type' to 'class'
+	allFound &= readField(m_visible, "visible", json, templateJson);
+	allFound &= readVector(m_size, "width", "height", json, templateJson);
+	allFound &= readVector(m_position, "x", "y", json, templateJson);
+
+	setObjectTypeByJson(json, templateJson);
+
+	if(m_objectType == ObjectType::Template)
+		allFound = true; //Just accept anything with this type
+
+	//More advanced data
+	readField(m_polygon, "polygon", json, templateJson);
+	readField(m_polyline, "polyline", json, templateJson);
+
+	// merge properties with template's.
+	if(templateJson) readProperties(m_properties, *templateJson, m_map);
+	readProperties(m_properties, json, m_map);
+
+	return allFound;
+}
+
 // W a n g s e t . h p p
 // ----------------------
 tson::TiledClass *tson::WangSet::getClass()
@@ -8874,7 +9186,7 @@ tson::TiledClass *tson::Object::getClass()
 		TiledClass* baseClass = (m_map != nullptr && m_map->getProject() != nullptr) ? m_map->getProject()->getClass(m_type) : nullptr;
 		if(baseClass != nullptr)
 		{
-			m_class = std::make_shared<TiledClass>(*baseClass);
+			m_class = std::make_shared<TiledClass>(*baseClass);//, m_map->getProject());
 			m_class->update(m_properties);
 		}
 	}
@@ -8989,4 +9301,3 @@ void tson::Property::setValueByType(IJson &json)
 /*** End of inlined file: tileson_forward.hpp ***/
 
 #endif //TILESON_TILESON_H
-

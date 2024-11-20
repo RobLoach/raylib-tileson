@@ -1,3 +1,8 @@
+# C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # raylib-tileson-test
 add_executable(raylib-tileson-test raylib-tileson-test.cpp)
 target_compile_options(raylib-tileson-test PRIVATE -Wall -Wextra -Wconversion -Wsign-conversion)

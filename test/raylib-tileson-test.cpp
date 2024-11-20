@@ -31,9 +31,9 @@ int main(int argc, char *argv[]) {
     }
 
     {
-        unsigned int bytesRead;
+        int bytesRead;
         unsigned char* data = LoadFileData("resources/desert.json", &bytesRead);
-        Map map = LoadTiledFromMemory(data, (int)bytesRead, "resources");
+        Map map = LoadTiledFromMemory(data, bytesRead, "resources");
 
         Assert(IsTiledReady(map));
         AssertEqual(map.width, 40);

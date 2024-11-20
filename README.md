@@ -40,8 +40,8 @@ int main(int argc, char* argv[]) {
 
 ## Dependencies
 
-- [raylib](https://www.raylib.com/)
-- C++17
+- [raylib](https://www.raylib.com/) ~5.5
+- C++17 or higher
 
 ## API
 
